@@ -1,0 +1,663 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>涨潮镇</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  :root{
+    --night:#0b1420; --sea1:#0f2338; --sea2:#16344f;
+    --mint:#9fe0c8; --foam:#7fd6e0; --sand:#e3d3a8;
+    --h0:#e6d6ac; --h1:#c6dc8e; --h2:#8fbb6c; --h3:#5f8f5a; --h4:#a9a49a; --h5:#cdc7b6;
+  }
+  html,body{height:100%}
+  body{
+    font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif;
+    background:radial-gradient(circle at 50% 115%,#1c4463 0%,#0e1c2c 55%,#0a121c 100%);
+    color:#eef2f5;display:flex;align-items:center;justify-content:center;
+    padding:20px;overflow:hidden;
+  }
+  /* 背景波光 */
+  .glow{position:fixed;left:0;right:0;bottom:0;height:45vh;pointer-events:none;
+    background:radial-gradient(ellipse at 50% 100%,rgba(127,214,224,.16),transparent 65%);
+    animation:breathe 7s ease-in-out infinite}
+  @keyframes breathe{0%,100%{opacity:.55}50%{opacity:1}}
+
+  .wrap{position:relative;width:min(92vw,600px);display:flex;flex-direction:column;gap:14px}
+
+  .head{display:flex;align-items:flex-end;justify-content:space-between;gap:12px}
+  .brand{font-size:30px;font-weight:600;letter-spacing:6px;
+    background:linear-gradient(100deg,#f4efe6,#9fe0c8 60%,#6cc4d9);
+    -webkit-background-clip:text;background-clip:text;color:transparent}
+  .stats{display:flex;gap:18px;font-size:13px;color:#8fa8bb}
+  .stats b{color:var(--mint);font-weight:600;font-size:17px;margin-left:4px;
+    display:inline-block;min-width:1.2em;text-align:center}
+  .stats b.pop{animation:pop .32s ease}
+  @keyframes pop{0%{transform:scale(1)}40%{transform:scale(1.45);color:#fff}100%{transform:scale(1)}}
+
+  .island{display:grid;grid-template-columns:repeat(var(--n,5),1fr);gap:6px;
+    padding:10px;border-radius:20px;background:rgba(8,20,32,.55);
+    box-shadow:0 24px 60px rgba(0,0,0,.45),inset 0 0 0 1px rgba(127,214,224,.1)}
+
+  .cell{position:relative;aspect-ratio:1;border-radius:8px;overflow:hidden;cursor:pointer;
+    display:flex;align-items:center;justify-content:center;
+    transition:transform .14s ease,box-shadow .14s ease;
+    box-shadow:inset 0 -6px 10px rgba(0,0,0,.18),inset 0 3px 6px rgba(255,255,255,.12)}
+  .cell[data-h="0"]{background:var(--h0)}
+  .cell[data-h="1"]{background:var(--h1)}
+  .cell[data-h="2"]{background:var(--h2)}
+  .cell[data-h="3"]{background:var(--h3)}
+  .cell[data-h="4"]{background:var(--h4);box-shadow:inset 0 -8px 14px rgba(0,0,0,.3),inset 0 4px 8px rgba(255,255,255,.22)}
+  .cell[data-h="5"]{background:var(--h5);box-shadow:inset 0 -10px 18px rgba(0,0,0,.4),inset 0 5px 10px rgba(255,255,255,.26)}
+  .cell[data-h="4"]::before,.cell[data-h="5"]::before{content:"";position:absolute;inset:0;
+    background:repeating-linear-gradient(135deg,transparent 0 9px,rgba(255,255,255,.07) 9px 11px)}
+  .cell:hover:not(.flooded):not(.full){transform:translateY(-3px);
+    box-shadow:0 10px 20px rgba(0,0,0,.35),inset 0 0 0 2px rgba(159,224,200,.85)}
+  .cell.flooded{cursor:default;transform:none}
+  .cell.full{cursor:default}
+  .cell.bump{animation:bump .34s cubic-bezier(.34,1.56,.64,1)}
+  @keyframes bump{0%{transform:scale(1)}40%{transform:scale(.9) translateY(4px)}70%{transform:scale(1.06)}100%{transform:scale(1)}}
+  /* 下一潮要淹的格子：橙色虚线预警 */
+  .cell.risk{box-shadow:inset 0 0 0 2px rgba(240,184,98,.9),
+    inset 0 0 14px rgba(240,140,60,.25),inset 0 -6px 10px rgba(0,0,0,.18)}
+  .cell.risk::after{content:"";position:absolute;inset:0;border-radius:10px;
+    animation:warn 1.6s ease-in-out infinite;pointer-events:none}
+  @keyframes warn{0%,100%{opacity:0}50%{opacity:.22;background:radial-gradient(circle,rgba(255,190,90,.9),transparent 70%)}}
+
+  /* 水层：从底部往上漫 */
+  .veil{position:absolute;left:0;right:0;bottom:0;height:0;
+    background:linear-gradient(180deg,rgba(127,214,224,.5),rgba(16,52,84,.92));
+    transition:height .62s cubic-bezier(.36,.7,.3,1)}
+  .veil::after{content:"";position:absolute;left:0;right:0;top:-3px;height:5px;border-radius:50%;
+    background:rgba(200,240,255,.75);filter:blur(1.5px);opacity:.9}
+  .cell.flooded .veil{height:100%}
+
+  .house{position:relative;z-index:2;width:64%;height:64%;border-radius:6px 6px 3px 3px;
+    background:linear-gradient(160deg,#fdf6e6,#d9c39a);
+    box-shadow:0 4px 0 rgba(90,70,45,.45),0 6px 12px rgba(0,0,0,.3);
+    animation:drop .3s cubic-bezier(.34,1.56,.64,1) both;
+    display:flex;align-items:center;justify-content:center;
+    font-size:11px;font-weight:700;color:#5a4630}
+  .house::before{content:"";position:absolute;left:-8%;right:-8%;top:-26%;height:34%;
+    background:linear-gradient(160deg,#e8734f,#c2502f);border-radius:50% 50% 4px 4px;
+    box-shadow:0 2px 4px rgba(0,0,0,.25)}
+  /* 鱼铺：青屋顶、矮一点，看得出来是两种东西 */
+  .house.fish{width:56%;height:56%;background:linear-gradient(160deg,#eef8f6,#bedcd6)}
+  .house.fish::before{background:linear-gradient(160deg,#4fa0ba,#2f7590)}
+  /* 退潮时可以修的房子：虚线框勾一下 */
+  .cell.canfix .house{outline:2px dashed #7bd3c8;outline-offset:2px;cursor:pointer}
+  .cell.canfix:hover .house{filter:brightness(1.15)}
+  .cell.canup .house{outline:2px dashed #e8c476;outline-offset:2px;cursor:pointer}
+  .cell.canup:hover .house{filter:brightness(1.12)}
+  .house.up{box-shadow:0 2px 0 rgba(0,0,0,.18),0 0 0 1px rgba(232,196,118,.55)}
+  .house.fish.up{background:linear-gradient(160deg,#f6fbf8,#a8d8d0)}
+  .house.fish.up::before{background:linear-gradient(160deg,#5cb4c8,#2a6a86)}
+  .house.soaked{filter:saturate(.55) brightness(.82)}
+  .cell.canclear .house.ruin{outline:2px dashed #d98b6a;opacity:.85;cursor:pointer}
+  .cell.canclear:hover .house.ruin{opacity:1}
+  .house .dur{position:absolute;bottom:2px;left:50%;transform:translateX(-50%);
+    font-size:8px;letter-spacing:0;color:#2f6b5e;font-style:normal;
+    text-shadow:0 1px 0 rgba(255,255,255,.45);white-space:nowrap;line-height:1}
+  @keyframes drop{0%{transform:translateY(-70%) scale(.7);opacity:0}
+    60%{opacity:1}100%{transform:translateY(0) scale(1);opacity:1}}
+  .house.sink{animation:sink .75s cubic-bezier(.4,0,.7,1) forwards}
+  @keyframes sink{
+    0%{transform:translateY(0) scale(1);opacity:1}
+    35%{transform:translateY(6px) scale(1.05) rotate(-5deg)}
+    100%{transform:translateY(46px) scale(.72) rotate(14deg);opacity:.28;filter:blur(1.4px)}}
+  /* 毁掉的房子：停在原地变成瓦砾，得花材料清走 */
+  .house.sink.ruin{animation:none;transform:translateY(8px) scale(.66) rotate(12deg);
+    opacity:.62;box-shadow:none;
+    background:linear-gradient(160deg,#9c8b70,#6b5c48)}
+  .house.sink.ruin::before{background:linear-gradient(160deg,#7a6549,#4e4132);opacity:.8}
+  .house.sink.ruin span{opacity:0}
+  .house.sink.ruin .dur{display:none}
+  .cell.canclear .house.sink.ruin{filter:brightness(1.15)}
+  .house .tag{position:absolute;bottom:-20px;left:50%;transform:translateX(-50%);
+    font-size:10px;color:rgba(255,255,255,.55);white-space:nowrap;font-weight:400}
+
+  .tide-meter{display:flex;gap:7px;justify-content:center;align-items:center}
+  .tide-meter i{width:52px;height:6px;border-radius:3px;background:rgba(160,200,235,.14);
+    transition:background .5s ease,box-shadow .5s ease}
+  .tide-meter i.on{background:linear-gradient(90deg,#7fd6e0,#3f8fc0);
+    box-shadow:0 0 12px rgba(127,214,224,.55)}
+  .tide-meter span{font-size:11px;color:#6f8799;letter-spacing:1px}
+
+  .foot{display:flex;gap:10px}
+  button{flex:1;padding:14px;border:none;border-radius:14px;cursor:pointer;
+    font-family:inherit;font-size:15px;font-weight:600;letter-spacing:1px;
+    color:#0d2130;background:linear-gradient(120deg,#9fe0c8,#6cc4d9);
+    box-shadow:0 8px 20px rgba(108,196,217,.28);
+    transition:transform .1s ease,filter .15s ease}
+  button:hover{filter:brightness(1.08)}
+  button:active{transform:translateY(1px) scale(.99)}
+  button:disabled{filter:grayscale(.7) brightness(.65);cursor:not-allowed;box-shadow:none}
+  button.ghost{flex:0 0 92px;background:transparent;color:#a8c2d4;
+    box-shadow:inset 0 0 0 1px rgba(160,200,235,.28)}
+  button.tool{flex:0 0 92px;background:transparent;color:#e6d3a6;
+    box-shadow:inset 0 0 0 1px rgba(230,200,140,.45)}
+  button.tool:hover{background:rgba(240,200,130,.12)}
+
+  .msg{font-size:13px;color:#93aec2;text-align:center;min-height:20px;letter-spacing:.4px;
+    transition:color .2s}
+  .msg.warn{color:#f0b862}
+
+  /* 结算 */
+  .over{position:fixed;inset:0;display:none;align-items:center;justify-content:center;
+    background:rgba(5,12,20,.78);backdrop-filter:blur(6px);z-index:10;padding:24px}
+  .over.show{display:flex;animation:fade .35s ease}
+  @keyframes fade{from{opacity:0}to{opacity:1}}
+  .card{width:min(90vw,400px);background:rgba(18,32,48,.96);border-radius:22px;padding:30px 26px;
+    text-align:center;box-shadow:0 30px 70px rgba(0,0,0,.6),inset 0 0 0 1px rgba(127,214,224,.16);
+    animation:rise .4s cubic-bezier(.34,1.4,.64,1) both}
+  @keyframes rise{from{transform:translateY(24px) scale(.94);opacity:0}to{transform:none;opacity:1}}
+  .card h2{font-size:22px;letter-spacing:3px;margin-bottom:6px;color:#e9f4f8}
+  .card .rank{font-size:44px;font-weight:700;letter-spacing:6px;margin:14px 0 4px;
+    background:linear-gradient(100deg,#f4efe6,#9fe0c8,#6cc4d9);
+    -webkit-background-clip:text;background-clip:text;color:transparent}
+  .card p{font-size:13.5px;color:#9db6c8;line-height:2}
+  .card p b{color:var(--mint)}
+  .card button{width:100%;margin-top:18px}
+  .over-island{display:grid;grid-template-columns:repeat(7,1fr);gap:3px;
+    width:min(100%,266px);margin:16px auto 10px}
+  .over-island i{aspect-ratio:1/1;border-radius:3px;background:#1d3348;display:block}
+  .over-island i.live{background:linear-gradient(160deg,#7fd6c6,#3f9b8a);
+    box-shadow:0 0 8px rgba(127,214,198,.5)}
+  .over-island i.empty{background:#1d3348}
+  .over-legend{font-size:11px;color:#7e94a6;letter-spacing:0;line-height:1.8;
+    display:flex;align-items:center;justify-content:center;gap:5px;flex-wrap:wrap}
+  .over-legend .k{width:9px;height:9px;border-radius:2px;display:inline-block}
+  .over-legend .k.live{background:#5fc0ae}
+  .over-legend .k.dead{background:#a9743f}
+  .over-legend .k.empty{background:#1d3348}
+  .over-board{margin-top:14px;border-top:1px solid rgba(127,214,224,.16);padding-top:12px}
+  .over-board h3{font-size:12px;letter-spacing:2px;color:#7e94a6;font-weight:400;margin-bottom:8px}
+  .over-board ol{list-style:none;display:flex;flex-direction:column;gap:4px}
+  .over-board li{display:flex;justify-content:space-between;font-size:12.5px;color:#9db6c8;
+    padding:3px 8px;border-radius:6px}
+  .over-board li b{color:#e9f4f8;font-weight:600}
+  .over-board li.me{background:rgba(127,214,198,.14);color:#cfe9e3}
+  .over-board li.me b{color:var(--mint)}
+</style>
+</head>
+<body>
+<div class="glow"></div>
+
+<div class="wrap">
+  <div class="head">
+    <div class="brand">涨潮镇</div>
+    <div class="stats">
+      <span>水位<b id="water">1</b></span>
+      <span>材料<b id="mats">3</b></span>
+      <span>房子<b id="count">0</b></span>
+      <span>潮<b id="tide">1/4</b></span>
+    </div>
+  </div>
+
+  <div class="island" id="island"></div>
+
+  <div class="tide-meter" id="meter">
+    <span>水</span><i></i><i></i><i></i><i></i><i></i><span>淹岛</span>
+  </div>
+
+  <div class="foot">
+    <button id="rise">起潮</button>
+    <button id="stop" class="tool">收工</button>
+    <button id="reset" class="ghost">重开</button>
+  </div>
+
+  <div class="msg" id="msg">点格子放房子。水涨上来就下不去了。</div>
+</div>
+
+<div class="over" id="over">
+  <div class="card">
+    <h2 id="overTitle">水淹满了全岛</h2>
+    <div class="rank" id="overRank">—</div>
+    <p id="overText"></p>
+    <div class="over-island" id="overIsland"></div>
+    <p class="over-legend"><span class="k live"></span>还站着 <span class="k dead"></span>沉了（越亮沉得越晚） <span class="k empty"></span>空地</p>
+    <div class="over-board" id="overBoard"></div>
+    <button id="again">再来一局</button>
+  </div>
+</div>
+
+<script>
+const H = [
+  [0,0,1,2,1,0,0],
+  [0,1,2,3,2,1,0],
+  [1,2,3,4,3,2,1],
+  [1,3,4,5,4,3,1],
+  [1,2,3,4,3,2,1],
+  [0,1,2,3,2,1,0],
+  [0,0,1,2,1,0,0],
+];
+const SIZE = 7, MAXWATER = 5;
+
+let S, cells = [];
+
+function init() {
+  S = { water: 1, mats: 6, houses: [], rises: 0, over: false,
+        tide: 'rise', MAXRISES: 8,
+        grid: H.map(r => r.slice()) };
+  cells = [];
+  const island = document.getElementById('island');
+  island.innerHTML = '';
+  island.style.setProperty('--n', SIZE);
+  for (let y = 0; y < SIZE; y++) {
+    for (let x = 0; x < SIZE; x++) {
+      const el = document.createElement('div');
+      el.className = 'cell';
+      el.dataset.h = S.grid[y][x];
+      const veil = document.createElement('div');
+      veil.className = 'veil';
+      el.appendChild(veil);
+      const cell = { x, y, h: S.grid[y][x], el, veil, house: null };
+      el.onclick = () => build(cell);
+      island.appendChild(el);
+      cells.push(cell);
+    }
+  }
+  document.getElementById('over').classList.remove('show');
+  update();
+  const at = w => cells.filter(c => c.h >= w).length;
+  setMsg(`低处盖鱼铺（每潮 +1 料，泡两次就塌），高处盖小屋（泡三次）。点完好的房子能升级：鱼铺→码头（每潮 +2），小屋→石屋（泡五次）。四周全被水围死的直接毁，废墟得花料清。岛 ${cells.length} 格——水到 3 楼只剩 ${at(3)} 格能站，4 楼 ${at(4)} 格，5 楼 ${at(5)} 格。`);
+}
+
+function cellAt(x, y) { return cells[y * SIZE + x]; }
+
+// 只说在哪一片，不给每栋起名——格子里放不下，也不直观
+function whereName(p) {
+  const v = p.y <= 1 ? '北' : p.y >= 5 ? '南' : '';
+  const u = p.x <= 1 ? '西' : p.x >= 5 ? '东' : '';
+  if (u && v) return u + v + '角';
+  if (u) return u + '边';
+  if (v) return v + '边';
+  return '中间';
+}
+
+// 四面都被水围住（岛外也算水）就是孤岛，撑不住
+function isSurrounded(h) {
+  const dirs = [[1,0],[-1,0],[0,1],[0,-1]];
+  for (const d of dirs) {
+    const nx = h.x + d[0], ny = h.y + d[1];
+    if (nx < 0 || ny < 0 || nx >= SIZE || ny >= SIZE) continue;
+    const n = cellAt(nx, ny);
+    if (n && n.h >= S.water) return false;
+  }
+  return true;
+}
+
+function update() {
+  document.getElementById('water').textContent = S.water;
+  document.getElementById('mats').textContent = S.mats;
+  document.getElementById('count').textContent = S.houses.filter(h => h.alive).length;
+  cells.forEach(c => {
+    const under = c.h < S.water;
+    c.el.dataset.h = c.h;
+    c.el.classList.toggle('flooded', under);
+    c.el.classList.toggle('full', !!c.house && c.house.alive);
+    c.el.classList.toggle('risk', !under && c.h === S.water && !S.over);
+    const fix = !S.over && S.tide === 'rise' && c.house && c.house.alive
+                && c.house.dur < c.house.maxDur && S.mats > 0;
+    c.el.classList.toggle('canfix', !!fix);
+    const up = !S.over && S.tide === 'rise' && c.house && c.house.alive
+               && c.house.level < 1 && c.house.dur === c.house.maxDur && S.mats >= 2;
+    c.el.classList.toggle('canup', !!up);
+    const clear = !S.over && c.house && !c.house.alive && S.mats > 0;
+    c.el.classList.toggle('canclear', !!clear);
+  });
+  const bars = document.querySelectorAll('#meter i');
+  bars.forEach((b, i) => b.classList.toggle('on', i < S.water));
+  document.getElementById('rise').disabled = S.over;
+  document.getElementById('stop').disabled = S.over;
+  document.getElementById('tide').textContent = `${Math.min(S.rises + 1, S.MAXRISES)}/${S.MAXRISES}`;
+  document.getElementById('rise').textContent =
+    S.tide === 'ebb' ? '退潮' : (S.rises >= S.MAXRISES - 1 ? '最后一潮' : '涨潮');
+}
+
+function setMsg(text, warn) {
+  const m = document.getElementById('msg');
+  m.textContent = text;
+  m.className = warn ? 'msg warn' : 'msg';
+}
+
+function pop(id) {
+  const el = document.getElementById(id);
+  el.classList.remove('pop');
+  void el.offsetWidth;
+  el.classList.add('pop');
+}
+
+function build(cell) {
+  if (S.over) return;
+  const has = cell.house;
+
+  // 毁掉的地方留着瓦砾，得花 1 个材料清走才能重盖
+  if (has && !has.alive) {
+    if (S.mats < 1) return setMsg('碎砖烂瓦挡着，得花 1 个材料才清得走。', true);
+    S.mats--;
+    has.el.remove();
+    cell.house = null;
+    pop('mats');
+    update();
+    setMsg('清干净了，这格能重新盖。');
+    return;
+  }
+
+  // 退潮时，点自己盖的房子＝花钱修（把泡掉的耐久补满）
+  if (S.tide === 'rise' && has && has.alive && has.dur < has.maxDur) {
+    if (S.mats < 1) return setMsg('没有材料，修不了。', true);
+    S.mats--;
+    has.dur = has.maxDur;
+    renderDur(has);
+    has.el.classList.remove('soaked');
+    pop('mats');
+    update();
+    setMsg('修好了。这栋又扛得住潮了。');
+    return;
+  }
+
+  // 完好无损的时候再点它＝升级：鱼铺变码头，小屋变石屋
+  if (S.tide === 'rise' && has && has.alive && has.level < 1) {
+    const up = has.fish
+      ? { name: '码头', maxDur: 3, gain: 2, cost: 2 }
+      : { name: '石屋', maxDur: 5, gain: 0, cost: 3 };
+    if (S.mats < up.cost) return setMsg(`升${up.name}要 ${up.cost} 个材料，不够。`, true);
+    S.mats -= up.cost;
+    has.name = up.name;
+    has.maxDur = up.maxDur;
+    has.dur = up.maxDur;
+    has.gain = up.gain;
+    has.level = 1;
+    has.el.querySelector('span').textContent = up.name;
+    has.el.title = `${whereName(cell)}的${up.name}`;
+    has.el.classList.add('up');
+    renderDur(has);
+    pop('mats');
+    update();
+    setMsg(has.fish
+      ? `升成${up.name}了：每潮上交 ${up.gain} 个材料，能泡 ${up.maxDur} 次。`
+      : `升成${up.name}了：能泡 ${up.maxDur} 次水。`);
+    return;
+  }
+
+  if (cell.h < S.water) return setMsg('这格已经在水底了，盖不上。', true);
+  if (cell.house && cell.house.alive) return setMsg('这格已经有东西了。', true);
+  if (S.mats <= 0) return setMsg('材料用完了，涨潮吧。', true);
+
+  S.mats--;
+  const fish = cell.h <= 2;
+  const name = fish ? '鱼铺' : '小屋';
+  const maxDur = fish ? 2 : 3;
+  const house = { x: cell.x, y: cell.y, h: cell.h, name, fish, level: 0,
+                  gain: fish ? 1 : 0, alive: true, dur: maxDur, maxDur };
+  S.houses.push(house);
+  cell.house = house;
+
+  const el = document.createElement('div');
+  el.className = 'house' + (fish ? ' fish' : '');
+  el.innerHTML = `<span>${name}</span><i class="dur"></i>`;
+  el.title = `${whereName(cell)}的${name}`;
+  cell.el.appendChild(el);
+  house.el = el;
+  renderDur(house);
+
+  pop('mats');
+  update();
+  setMsg(fish ? `鱼铺。每潮上交 1 个材料，只能泡 ${maxDur} 次水。`
+              : `小屋。什么也不产，但能泡 ${maxDur} 次。`);
+}
+
+function renderDur(h) {
+  const i = h.el.querySelector('.dur');
+  if (!i) return;
+  i.textContent = '●'.repeat(Math.max(0, h.dur)) + '○'.repeat(Math.max(0, h.maxDur - h.dur));
+}
+
+function rise() {
+  if (S.over || S.water >= MAXWATER) return;
+  const before = S.water;
+  const jump = Math.random() < 0.30 ? 2 : 1;
+
+  // 先收成：活着的鱼铺、码头按各自的产出上交
+  const gained = S.houses.filter(h => h.alive && h.gain)
+    .reduce((a, h) => a + h.gain, 0);
+  S.mats += gained;
+
+  S.rises++;
+  S.water = Math.min(MAXWATER, S.water + jump);
+
+  // 由低到高漫水
+  const order = [...cells].filter(c => c.h < S.water).sort((a, b) => a.h - b.h);
+  let lastH = -1, step = 0;
+  order.forEach(c => {
+    if (c.h !== lastH) { lastH = c.h; step++; }
+    setTimeout(() => c.el.classList.add('flooded'), (step - 1) * 140);
+  });
+
+  // 泡水的房子：掉一点耐久；被水四面围住的，直接毁
+  const wet = S.houses.filter(h => h.alive && h.h < S.water);
+  const caged = S.houses.filter(h => h.alive && isSurrounded(h));
+  const doomed = wet.filter(h => h.dur <= 1 && !isSurrounded(h));
+  const hit = [...new Set([...wet, ...caged])];
+  hit.forEach((h, i) => {
+    setTimeout(() => {
+      const cage = isSurrounded(h);
+      if (cage) h.dur = 0; else h.dur--;
+      renderDur(h);
+      if (h.dur <= 0) {
+        h.alive = false;
+        h.drownedAt = S.water;
+        h.tideIndex = S.rises;
+        h.caged = cage;
+        h.el.classList.add('sink');
+        h.el.style.zIndex = 1;
+        setTimeout(() => h.el.classList.add('ruin'), 780);
+      } else {
+        h.el.classList.add('soaked');
+      }
+    }, (step - 1) * 140 + i * 70);
+  });
+
+  document.getElementById('mats').textContent = S.mats;
+  pop('water'); pop('mats');
+
+  const big = (S.water - before) === 2;
+  const head = big ? `大潮！水位一下跳到 ${S.water}。` : `潮来了，水位 ${S.water}。`;
+  const earn = gained ? `渔获卖了 ${gained} 个材料。` : '';
+  let tide_note = '都还站着。';
+  if (caged.length) tide_note = `${caged.length} 栋被水围死，毁了。`;
+  else if (doomed.length) {
+    const m = new Map();
+    doomed.forEach(h => {
+      const k = whereName(h) + h.name;
+      m.set(k, (m.get(k) || 0) + 1);
+    });
+    tide_note = [...m.entries()]
+      .map(([k, n]) => n > 1 ? `${k} ${n} 栋` : k).join('、') + '沉了。';
+  }
+  else if (wet.length) tide_note = `${wet.length} 栋泡在水里，伤着了。`;
+  const warn = caged.length > 0 || doomed.length > 0;
+  setMsg(`${head}${earn}${tide_note}`, warn);
+
+  setTimeout(() => {
+    update();
+    if (S.water >= MAXWATER) { finish('flood'); return; }
+    if (S.rises >= S.MAXRISES) { finish('done'); return; }
+    S.tide = 'ebb';
+    update();
+    setMsg(`${head}${earn}水退下去之后，伤着的能修。`, false);
+  }, step * 140 + 300);
+}
+
+function ebb() {
+  if (S.over) return;
+  S.water = Math.max(0, S.water - 1);
+  S.tide = 'rise';
+  pop('water');
+  update();
+  const fixable = S.houses.filter(h => h.alive && h.dur < h.maxDur).length;
+  if (fixable && S.mats > 0)
+    setMsg(`水退到 ${S.water}。有 ${fixable} 栋带着伤，点一下花 1 个材料能修满。`);
+  else
+    setMsg(`水退到 ${S.water}。低处露出来了，接着盖。`);
+}
+
+function advance() {
+  if (S.over) return;
+  if (S.tide === 'ebb') ebb(); else rise();
+}
+
+function stop() {
+  if (S.over) return;
+  finish('stop');
+}
+
+const BEST_KEY = 'tidal-town-best';
+const BOARD_KEY = 'tidal-town-board';
+function readBest() {
+  try { return JSON.parse(localStorage.getItem(BEST_KEY)) || null; } catch (e) { return null; }
+}
+function saveBest(v) {
+  try { localStorage.setItem(BEST_KEY, JSON.stringify(v)); } catch (e) {}
+}
+function readBoard() {
+  try { return JSON.parse(localStorage.getItem(BOARD_KEY)) || []; } catch (e) { return []; }
+}
+function pushBoard(rec) {
+  const list = readBoard();
+  list.push(rec);
+  list.sort((a, b) => b.alive - a.alive || b.rises - a.rises);
+  const cut = list.slice(0, 5);
+  try { localStorage.setItem(BOARD_KEY, JSON.stringify(cut)); } catch (e) {}
+  return { list: cut, rec };
+}
+
+function renderBoard(list, rec) {
+  const box = document.getElementById('overBoard');
+  box.innerHTML = '';
+  const h = document.createElement('h3');
+  h.textContent = '守得住的';
+  box.appendChild(h);
+  const ol = document.createElement('ol');
+  list.forEach(r => {
+    const li = document.createElement('li');
+    if (r.at === rec.at) li.className = 'me';
+    const left = document.createElement('b');
+    left.textContent = `${r.alive} 栋`;
+    const right = document.createElement('span');
+    right.textContent = `撑 ${r.rises} 潮 · 盖过 ${r.total}`;
+    li.append(left, right);
+    ol.appendChild(li);
+  });
+  box.appendChild(ol);
+}
+
+function finish(reason) {
+  S.over = true;
+  update();
+  const total = S.houses.length;
+  const alive = S.houses.filter(h => h.alive).length;
+
+  let rank, note;
+  if (reason === 'flood') {
+    rank = '没了';
+    note = '水漫满了全岛，一件都没剩下。';
+  } else if (alive >= 8) {
+    rank = '像座镇'; note = '水退下去的时候，半个岛还是站着的。';
+  } else if (alive >= 4) {
+    rank = '站住了'; note = '留住了几栋，不多不少。';
+  } else if (alive >= 1) {
+    rank = '剩几根桩'; note = '就这几样东西还在水面上。';
+  } else {
+    rank = '空手'; note = '撑到最后，岛上什么都没有。';
+  }
+
+  document.getElementById('overTitle').textContent =
+    reason === 'flood' ? '水淹满了全岛'
+    : reason === 'stop' ? '你收了工'
+    : '八个潮过去了';
+  document.getElementById('overRank').textContent = rank;
+  const lastDead = S.houses.filter(h => !h.alive)
+    .sort((a, b) => (b.tideIndex || 0) - (a.tideIndex || 0))[0];
+  const extra = lastDead
+    ? `<br>撑得最久的是${whereName(lastDead)}那栋，第 ${lastDead.tideIndex} 潮才没的。` : '';
+  const prev = readBest();
+  const isNew = !prev || alive > prev.alive;
+  if (isNew && alive > 0) saveBest({ alive, rises: S.rises });
+  const bestNote = !prev
+    ? '<br>这是你的第一局，记下了。'
+    : isNew ? '<br>比你之前守得最多的一局还多。'
+    : `<br>你最多守过 ${prev.alive} 栋。`;
+  document.getElementById('overText').innerHTML =
+    `一共盖了 <b>${total}</b> 栋，收工的时候还站着 <b>${alive}</b> 栋。${extra}${bestNote}`;
+  const rec = { alive, total, rises: S.rises, at: Date.now() };
+  const board = pushBoard(rec);
+  renderBoard(board.list, rec);
+  drawOverMap();
+  document.getElementById('over').classList.add('show');
+}
+
+// 收工的时候把整岛摊开：哪栋还站着、哪栋死在第几潮
+function drawOverMap() {
+  const box = document.getElementById('overIsland');
+  box.innerHTML = '';
+  for (let y = 0; y < SIZE; y++) {
+    for (let x = 0; x < SIZE; x++) {
+      const c = cellAt(x, y);
+      const d = document.createElement('i');
+      const h = c.house;
+      if (!h) {
+        d.className = 'empty';
+        d.title = `${whereName(c)}，${c.h} 米高，空着`;
+      } else if (h.alive) {
+        d.className = 'live';
+        d.title = `${whereName(h)}的${h.name}，还站着`;
+      } else {
+        d.className = 'dead';
+        const t = h.tideIndex || 1;
+        d.style.background = `hsl(28, 45%, ${20 + t * 8}%)`;
+        d.title = `${whereName(h)}的${h.name}，第 ${t} 潮没的`;
+      }
+      box.appendChild(d);
+    }
+  }
+}
+
+document.getElementById('rise').onclick = advance;document.getElementById('stop').onclick = stop;
+document.getElementById('reset').onclick = init;
+document.getElementById('again').onclick = init;
+
+init();
+
+// 调试用：?auto=N 自动走 N 步，?end=1 走完直接收工，方便截图看结算
+const _auto = +(new URLSearchParams(location.search).get('auto') || 0);
+const _end = new URLSearchParams(location.search).get('end');
+if (_auto) {
+  let _n = 0;
+  const _t = setInterval(() => {
+    if (_n++ >= _auto || S.over) {
+      clearInterval(_t);
+      if (!S.over && _end) stop();
+      return;
+    }
+    if (S.tide === 'rise') {
+      let guard = 80;
+      while (S.mats > 0 && guard--) {
+        const up = cells.filter(c => c.house && c.house.alive && c.house.level < 1
+                                     && c.house.dur === c.house.maxDur
+                                     && c.house.fish && S.mats >= 2);
+        if (up.length) { build(up[0]); continue; }
+        const free = cells.filter(c => c.h >= S.water && !c.house);
+        if (!free.length) break;
+        free.sort((a, b) => a.h - b.h);
+        build(free[0]);
+      }
+    }
+    advance();
+  }, 1600);
+}
+</script>
+</body>
+</html>
